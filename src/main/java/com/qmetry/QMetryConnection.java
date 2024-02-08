@@ -44,6 +44,9 @@ public class QMetryConnection {
 	return true;
     }
 
+	private static final int ONE_MIN = 60000;
+	private static final int MAX_ATTEMPTS = 5;
+
 	public void uploadFileToTestSuite(String filePath, String testSuiteName, String testSName, String tsFolderPath, String automationFramework, String automationHierarchy,
 									  String buildName, String platformName, String project, String release, String cycle, String pluginName, /*BuildListener*/TaskListener listener,
 									  int buildnumber, String proxyUrl, String testCaseField, String testSuiteField, String skipWarning, String isMatchingRequired) throws Exception {
@@ -216,6 +219,7 @@ public class QMetryConnection {
 		boolean flag = false;
 		//Loop to start timer ( Run from current time to next 10 mins in future)
 		while (System.currentTimeMillis() < end) {
+			Thread.sleep(ONE_MIN);
 			CloseableHttpResponse statusResponse = httpClient.execute(getStatus);
 			statusString = EntityUtils.toString(statusResponse.getEntity());
 			JSONObject statusObj = (JSONObject) new JSONParser().parse(statusString);
@@ -227,6 +231,33 @@ public class QMetryConnection {
 			}
 			// Completed or Failed status in logs
 			if(statusObj.get("status").toString().equals("Completed")||statusObj.get("status").toString().equals("Failed")){
+				listener.getLogger().println(s);
+				break;
+			}
+		}
+	}
+
+	//check method for call being in progress
+	public void checkForInProgress(Object requestId, CloseableHttpClient httpClient, String pluginName, TaskListener listener) throws Exception{
+		String statusString = null;
+		HttpGet getStatus = new HttpGet(getUrl() + "/rest/admin/status/automation/" + requestId);
+		getStatus.addHeader("apiKey",getKey());
+		getStatus.addHeader("scope","default");
+		for (int i = 0; i<=MAX_ATTEMPTS; i++) {
+			Thread.sleep(ONE_MIN);
+			CloseableHttpResponse statusResponse = httpClient.execute(getStatus);
+			statusString = EntityUtils.toString(statusResponse.getEntity());
+			JSONObject statusObj = (JSONObject) new JSONParser().parse(statusString);
+			
+			String s = pluginName + " : Response --> " + statusObj.toString().replace("\\/", "/");
+			
+			//In Progress status in logs
+			if(statusObj.get("status").toString().equals("In Progress")) {
+				listener.getLogger().println("Check Attempt :"+ i);
+				listener.getLogger().println(s);
+			}
+			// Completed or Failed status in logs
+			if(statusObj.get("status").toString().equals("Completed")|| statusObj.get("status").toString().equals("Failed")){
 				listener.getLogger().println(s);
 				break;
 			}
